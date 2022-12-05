@@ -34,24 +34,24 @@ result_t run_experiment(double (*integrate)(double, double,
                         double a, double b, double (*f)(double)) {
 	result_t res;
 	auto tm1 = std::chrono::steady_clock::now();
-	
+
 	res.value = integrate(-1, 1, f);
-	
+
 	res.milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(
 			std::chrono::steady_clock::now() - tm1)
 			.count();
-	
+
 	return res;
 }
 
 double integrate_seq(double a, double b, double (*f)(double)) {
 	double dx = (b - a) / N;
 	double res = 0;
-	
+
 	for (int i = 0; i < N; i++) {
 		res += f(a + i * dx);
 	}
-	
+
 	return dx * res;
 }
 
@@ -63,14 +63,14 @@ double integrate_par(double a, double b, double (*f)(double)) {
 	for (int i = 0; i < N; i++) {
 		res += f(a + i * dx);
 	}
-	
+
 	return dx * res;
 }
 
 double integrate_rr(double a, double b, double (*f)(double)) {
 	double dx = (b - a) / N;
 	double res = 0;
-	
+
 	unsigned P = omp_get_num_procs();
 	double *partical_res;
 #pragma omp parallel
@@ -82,19 +82,19 @@ double integrate_rr(double a, double b, double (*f)(double)) {
 #pragma omp single
 		{ partical_res = (double *) calloc(P, sizeof(double)); }
 		double sum = 0;
-		
+
 		for (unsigned R = 0; t + R * T < N; ++R) {
 			sum += f(a + (t + R * T) * dx);
 		}
 		partical_res[t] += sum;
-		
-		
+
+
 	}
 	for (unsigned t = 0; t < P; ++t)
 		res += partical_res[t];
-	
+
 	free(partical_res);
-	
+
 	return dx * res;
 }
 
@@ -115,12 +115,12 @@ double average_par_1(const double *V, size_t n) {
 #pragma omp single
 		{
 			sums = (partial_sum_t *) malloc(T * sizeof(partial_sum_t));
-			
+
 		};
 		for (size_t i = t; i < n; i += T) {
 			local_sum += V[i];
 			sums[t].value = local_sum;
-			
+
 		}
 		for (size_t i = 0; i < T; ++i) {
 			free(sums);
@@ -146,20 +146,20 @@ double average_par_2(const double *V, size_t m) {
 			T = omp_get_num_threads();
 			sums = (partial_sum_t *) malloc(T * sizeof(partial_sum_t));
 		};
-		
+
 		unsigned n_t = t < (m % T) ? (int) m / T + 1 : (int) m / T;
 		unsigned i_0 = t < (m % T) ? ((int) m / T + 1) * T : (int) m / T * t + (m % T);
-		
+
 		for (size_t i = i_0; i < n_t; i++) {
 			local_sum += V[i];
 		}
 		sums[t].value = local_sum;
 	};
-	
+
 	for (size_t i = 0; i < T; ++i) {
 		r += sums[i].value;
 	}
-	
+
 	free(sums);
 	return r;
 }
@@ -172,7 +172,7 @@ double average_cs_omp(const double *v, size_t n) {
 		unsigned T = omp_get_num_threads();
 		unsigned t = omp_get_thread_num();
 		size_t nt, i0;
-		
+
 		if (t < n % T) {
 			nt = n / T + 1;
 			i0 = nt * t;
@@ -180,9 +180,9 @@ double average_cs_omp(const double *v, size_t n) {
 			nt = n / T;
 			i0 = t * (n / T) + (n % T);
 		}
-		
+
 		double par_sum;
-		
+
 		for (size_t i = i0; i < nt + i0; i++) {
 			par_sum += v[i];
 		}
@@ -191,7 +191,7 @@ double average_cs_omp(const double *v, size_t n) {
 			total_sum += par_sum;
 		}
 	}
-	
+
 	return total_sum / n;
 }
 //double integrate_(double a, double b, double (*f)(double)) {
@@ -214,25 +214,25 @@ double average_cs_cpp(const double *V, size_t m) {
 	auto tp1 = [&mtx1, &x1, &mtx2, &x2]() {
 		mtx1.lock();
 		x1++;
-		
+
 		load(100);
 		mtx2.lock();
 		x2++;
-		
+
 		mtx2.unlock();
 		mtx1.unlock();
 	};
-	
+
 	auto tp2 = [&mtx2, &x2, &mtx1, &x1]() {
 		mtx2.lock();
 		x2--;
 		mtx1.lock();
 		x1--;
-		
+
 		mtx1.unlock();
 		mtx2.unlock();
 	};
-	
+
 	auto th1 = std::thread(tp1), th2 = std::thread(tp2);
 	th1.join();
 	th2.join();
@@ -242,16 +242,16 @@ double average_cs_cpp(const double *V, size_t m) {
 double integrate_cpp_partial_sums(double a, double b, double (*f)(double)) {
 //	std::size_t T = std::thread::hardware_concurrency();
 	std::size_t T = g_num_thread;
-	
+
 	auto partial_sums = std::make_unique<double[]>(T);
-	
+
 	auto thread_proc = [T, &partial_sums, a, b, f](std::size_t t) {
 		double sum = 0;
 		partial_sums[t] = 0;
 		auto dx = (b - a) / N;
 		for (auto i = t; i < N; i += T)
 			sum += f(i * dx + a);
-		
+
 		partial_sums[t] += sum;
 		partial_sums[t] *= dx;
 	};
@@ -262,7 +262,7 @@ double integrate_cpp_partial_sums(double a, double b, double (*f)(double)) {
 		worker.join();
 	for (std::size_t t = 1; t < T; ++t)
 		partial_sums[0] += partial_sums[t];
-	
+
 	return partial_sums[0];
 }
 
@@ -287,18 +287,18 @@ double integrateArrAlign(double a, double b, double (*f)(double)) {
 			T = (unsigned) omp_get_num_threads();
 			accum = new partialSumT[T];
 		}
-		
+
 		for (unsigned i = t; i < N; i += T) {
 			accum[t].value[0] += f(dx * i + a);
 		}
 	}
-	
+
 	for (unsigned i = 0; i < T; ++i) {
 		result += accum[i].value[0];
 	}
-	
+
 	delete[] accum;
-	
+
 	return N;
 }
 
@@ -357,14 +357,14 @@ double average (const double *V, size_t m) {
 		unsigned T =omp_get_num_threads();
 		unsigned t = omp_get_thread_num();
 		size_t nt = m/T, i0 = m % T;
-		
+
 		if (t<i0)
 			i0 = ++nt*t;
 		else
 			i0 = t*nt;
-		
+
 		double par_sum = 0;
-		
+
 		for (size_t i = i0; i < nt; i++) {
 			par_sum += V[i];
 		}
@@ -374,25 +374,24 @@ double average (const double *V, size_t m) {
 			result_t += par_sum;
 		}
 	}
-	
+
 	return result_t / m;
 }
 
-extern int global;
-std::mutex mtx;
-
-void thread_proc(int x)
-{
-	int x_sg = x * x;
-	x_sg = x_sg + x_sg + x * x;
-	{
-		std::scoped_lock lock{mtx};
-		++global;
-	}
-	
-//	return x_sg;
-	return;
-}
+//extern int global;
+//std::mutex mtx;
+//
+//void thread_proc(int x)
+//{
+//	int x_sg = x * x;
+//	x_sg = x_sg + x_sg + x * x;
+//	{
+//		std::scoped_lock lock{mtx};
+//		++global;
+//	}
+////	return x_sg;
+//	return;
+//}
 
 //queue<int> q;
 //bool q_empty;
@@ -416,55 +415,145 @@ void thread_proc(int x)
 //}
 
 
+unsigned checkSumMutex(const unsigned* v, size_t n) {
+	unsigned totalSum = 0;
+	std::mutex mtx;
+	std::vector<std::thread> workers;
+
+	auto worker = [&totalSum, &mtx, v, n] (unsigned t) {
+		unsigned T = get_num_threads();
+		unsigned localSum = 0;
+		size_t nt, i0;
+
+		if (t < n % T) {
+			nt = n / T + 1;
+			i0 = nt * t;
+		} else {
+			nt = n / T;
+			i0 = nt * (n % T);
+		}
+
+		for (size_t i = i0; i < nt + i0; ++i) {
+			localSum ^= v[i];
+		}
+
+		std::scoped_lock lock{mtx};
+		totalSum ^= localSum;
+	};
+
+	for (unsigned t = 1; t < get_num_threads(); ++t) {
+		workers.emplace_back(worker, t);
+	}
+	worker(0);
+	for (auto &w : workers) {
+		w.join();
+	}
+
+	return totalSum;
+}
+
+double check_sum(const unsigned *v, size_t n) {
+	unsigned total_sum = 0.;
+
+#pragma omp parallel
+	{
+		unsigned T = omp_get_num_threads();
+		unsigned t = omp_get_thread_num();
+		size_t nt, i0;
+
+		if (t < n % T) {
+			nt = n / T + 1;
+			i0 = nt * t;
+		} else {
+			nt = n / T;
+			i0 = t * (n / T) + (n % T);
+		}
+
+		unsigned par_sum;
+
+		for (size_t i = i0; i < nt + i0; i++) {
+			par_sum ^= v[i];
+		}
+#pragma omp critical
+		{
+			total_sum ^= par_sum;
+		}
+	}
+
+	return total_sum;
+}
+
+//int main() {
+//	auto m = std::make_unique<unsigned []>(N);
+//	std::generate_n(m.get(), N, []() {
+//		static int i;
+//		return i++;
+//	});
+//
+//	std::cout << checkSumMutex(m.get(), N) << std::endl;
+//
+//	return 0;
+//}
 
 int main() {
-//	auto f = [](double x) { return x * x; };
-//	auto r_seq = run_experiment(integrate_seq, -1, 1, f);
-//	auto r_par = run_experiment(integrate_par, -1, 1, f);
-//	auto r_rr = run_experiment(integrate_rr, -1, 1, f);
-//	auto r_cps = run_experiment(integrate_cpp_partial_sums, -1, 1, f);
-//	auto r_arr = run_experiment(integrateArrAlign, -1, 1, f);
-//
-//	std::cout << "Res seq: t=" << r_seq.milliseconds << ", r=" << r_seq.value
-//	          << '\n';
-//	std::cout << "Res par: t=" << r_par.milliseconds << ", r=" << r_par.value
-//	          << '\n';
-//	std::cout << "Res rr: t=" << r_rr.milliseconds << ", r=" << r_rr.value
-//	          << '\n';
-////	std::cout << "Res lol: t=" << r_lol.milliseconds << ", r=" << r_lol.value
-////	          << '\n';
-//	std::cout << "Res cps: t=" << r_cps.milliseconds << ", r=" << r_cps.value
-//	          << '\n';
-//	std::cout << "Res arr: t=" << r_arr.milliseconds << ", r=" << r_arr.value
-//	          << '\n';
-//	measure_scalability(integrate_cpp_partial_sums);
-//	measure_scalability(integrate_rr);
-//	measure_scalability(integrateArrAlign);
-
-
-//	std::cout << average_par_1(V, 9) << std::endl;
-//	std::cout << average_par_2(V, 9) << std::endl;
-//	std::cout << average_cs_omp(V, 9) << std::endl;
-
-//    std::cout << "AveragePar1:" << std::endl;
-//    measure_scalability(average_par_1);
-//	measure_scalability(average_cs_cpp);
-//	std::cout << "AveragePar2:" << std::endl;
-//	measure_scalability(average_par_2);
-//	std::cout << "CriticalSection:" << std::endl;
-//	measure_scalability(average_cs_omp);
-	
-	std::size_t n = 100000;
-	auto m = std::make_unique<double[]>(n);
-	std::generate_n(m.get(), n, []() {
-		static int i;
-		return i++;
-	});
-	
-	std::cout << "Average value: " << average(m.get(), n) << std::endl;
-	
-	return 0;
-	
-	
-	
+	std::size_t n1 = 23342321;
+	auto m = std::make_unique<unsigned[]>(n1);
+	for (size_t i = 0; i < n1; ++i) {
+		m.get()[i] = 0x12345678;
+	}
+	unsigned cs = checkSumMutex(m.get(), n1);
+	std::cout << "CheckSum value: " << std::hex << cs << "\n";
 }
+
+//
+//int main() {
+////	auto f = [](double x) { return x * x; };
+////	auto r_seq = run_experiment(integrate_seq, -1, 1, f);
+////	auto r_par = run_experiment(integrate_par, -1, 1, f);
+////	auto r_rr = run_experiment(integrate_rr, -1, 1, f);
+////	auto r_cps = run_experiment(integrate_cpp_partial_sums, -1, 1, f);
+////	auto r_arr = run_experiment(integrateArrAlign, -1, 1, f);
+////
+////	std::cout << "Res seq: t=" << r_seq.milliseconds << ", r=" << r_seq.value
+////	          << '\n';
+////	std::cout << "Res par: t=" << r_par.milliseconds << ", r=" << r_par.value
+////	          << '\n';
+////	std::cout << "Res rr: t=" << r_rr.milliseconds << ", r=" << r_rr.value
+////	          << '\n';
+//////	std::cout << "Res lol: t=" << r_lol.milliseconds << ", r=" << r_lol.value
+//////	          << '\n';
+////	std::cout << "Res cps: t=" << r_cps.milliseconds << ", r=" << r_cps.value
+////	          << '\n';
+////	std::cout << "Res arr: t=" << r_arr.milliseconds << ", r=" << r_arr.value
+////	          << '\n';
+////	measure_scalability(integrate_cpp_partial_sums);
+////	measure_scalability(integrate_rr);
+////	measure_scalability(integrateArrAlign);
+//
+//
+////	std::cout << average_par_1(V, 9) << std::endl;
+////	std::cout << average_par_2(V, 9) << std::endl;
+////	std::cout << average_cs_omp(V, 9) << std::endl;
+//
+////    std::cout << "AveragePar1:" << std::endl;
+////    measure_scalability(average_par_1);
+////	measure_scalability(average_cs_cpp);
+////	std::cout << "AveragePar2:" << std::endl;
+////	measure_scalability(average_par_2);
+////	std::cout << "CriticalSection:" << std::endl;
+////	measure_scalability(average_cs_omp);
+//
+//	std::size_t n = 100000;
+//	auto m = std::make_unique<double[]>(n);
+//	std::generate_n(m.get(), n, []() {
+//		static int i;
+//		return i++;
+//	});
+//
+//	std::cout << "Average value: " << average(m.get(), n) << std::endl;
+//
+//	return 0;
+//
+//
+//
+//}
